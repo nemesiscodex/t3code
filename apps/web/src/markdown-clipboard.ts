@@ -330,8 +330,13 @@ export function chatMarkdownClipboardPayload(
       }
       continue;
     }
-    const text = serializeRenderedMarkdownFragment(container);
-    if (!text) continue;
+    const markdown = serializeRenderedMarkdownFragment(container);
+    if (!markdown) continue;
+    const pre = container.querySelector("pre");
+    // If the serializer found nothing beyond this block, the selection was
+    // code-only. Copy its visible text instead of recreating its fence.
+    const text =
+      pre && markdown === serializeCodeBlock(pre).trim() ? (pre.textContent ?? markdown) : markdown;
     texts.push(text);
     htmls.push(sanitizedHtmlFrom(container));
   }
