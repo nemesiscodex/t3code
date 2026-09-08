@@ -90,6 +90,7 @@ it.effect.each([false, true, "interrupt"] as const)(
       });
 
       assert.equal(baseline.ordinalWithinScope, 2);
+      assert.match(baseline.ref, /^refs\/t3-v2\/orchestration-v2\/checkpoints\//);
       assert.equal(
         baseline.ref,
         checkpointRefForScopeOrdinal({
