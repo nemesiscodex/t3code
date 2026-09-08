@@ -56,6 +56,7 @@ it.effect("materializes the captured baseline at the requested scope ordinal", (
     });
 
     assert.equal(baseline.ordinalWithinScope, 2);
+    assert.match(baseline.ref, /^refs\/t3-v2\/orchestration-v2\/checkpoints\//);
     assert.equal(
       baseline.ref,
       checkpointRefForScopeOrdinal({
