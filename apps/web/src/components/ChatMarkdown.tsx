@@ -7,6 +7,7 @@ import {
 import {
   ChevronRightIcon,
   CodeIcon,
+  EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   GlobeIcon,
@@ -102,6 +103,7 @@ import {
   resolveMarkdownMediaPreview,
   type ExpandedImagePreview,
 } from "./chat/ExpandedImagePreview";
+import { MermaidPreview } from "./chat/MermaidPreview";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { markdownImageGallery, markdownImageItems } from "./chat/markdownImageGallery";
 import { MediaVideoPlayer } from "./media/MediaVideoPlayer";
@@ -995,6 +997,7 @@ function MarkdownCodeBlock({
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
+  const [preview, setPreview] = useState<{ code: string; theme: "light" | "dark" } | null>(null);
   const [wrapped, setWrapped] = useState(readInitialWordWrapSetting);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
@@ -1095,6 +1098,24 @@ function MarkdownCodeBlock({
           />
         </span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
+          {language === "mermaid" && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost-muted"
+                    size="icon-xs"
+                    onClick={() => setPreview({ code, theme })}
+                    aria-label="Preview Mermaid diagram"
+                  />
+                }
+              >
+                <EyeIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Preview Mermaid diagram</TooltipPopup>
+            </Tooltip>
+          )}
           {leadingActions}
           {canWrap ? (
             <Tooltip>
@@ -1137,6 +1158,7 @@ function MarkdownCodeBlock({
         </span>
       </div>
       {children}
+      {preview !== null && <MermaidPreview {...preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
