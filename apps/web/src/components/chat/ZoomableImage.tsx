@@ -1,3 +1,5 @@
+import { MaximizeIcon, MinusIcon, PlusIcon } from "lucide-react";
+import { Button } from "../ui/button";
 import {
   useCallback,
   useEffect,
@@ -20,11 +22,13 @@ export function ZoomableImage({
   name,
   onError,
   ref,
+  controls = false,
 }: {
   src: string;
   name: string;
   onError: () => void;
   ref?: Ref<ZoomableImageHandle>;
+  controls?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -44,7 +48,10 @@ export function ZoomableImage({
   } | null>(null);
   const suppressClickRef = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const maxHeight = Math.max(1, Math.min(windowSize.height * 0.86, windowSize.height - 80));
+  const maxHeight = Math.max(
+    1,
+    Math.min(windowSize.height * 0.86, windowSize.height - (controls ? 220 : 80)),
+  );
   const fit = Math.min(
     1,
     (windowSize.width * 0.92) / (naturalSize.width || 1),
@@ -167,6 +174,13 @@ export function ZoomableImage({
           } else if (event.key === "-") {
             event.preventDefault();
             changeZoom(zoomRef.current / 1.5);
+          } else if (controls && event.key.startsWith("Arrow")) {
+            event.preventDefault();
+            const viewport = event.currentTarget;
+            if (event.key === "ArrowLeft") viewport.scrollLeft -= 40;
+            if (event.key === "ArrowRight") viewport.scrollLeft += 40;
+            if (event.key === "ArrowUp") viewport.scrollTop -= 40;
+            if (event.key === "ArrowDown") viewport.scrollTop += 40;
           } else if (event.key === "0") {
             event.preventDefault();
             changeZoom(1);
@@ -231,6 +245,36 @@ export function ZoomableImage({
           onError={onError}
         />
       </div>
+      {controls && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Zoom out"
+            disabled={zoom === 1}
+            onClick={() => changeZoom(zoomRef.current / 1.5)}
+          >
+            <MinusIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Zoom in"
+            disabled={zoom === MAX_ZOOM}
+            onClick={() => changeZoom(zoomRef.current * 1.5)}
+          >
+            <PlusIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Fit diagram"
+            onClick={() => changeZoom(1)}
+          >
+            <MaximizeIcon />
+          </Button>
+        </div>
+      )}
       <span className="sr-only" aria-live="polite">
         {Math.round(zoom * 100)}% zoom
       </span>
