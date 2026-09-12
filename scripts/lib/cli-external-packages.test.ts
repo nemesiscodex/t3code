@@ -1,4 +1,5 @@
 import * as NodeURL from "node:url";
+import { build } from "vite-plus/pack";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -6,15 +7,64 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
 
 import {
   CLI_RUNTIME_EXTERNAL_PREFIXES,
   findInlinedExternalPackages,
+  isExternalCliDependency,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
 } from "./cli-external-packages.ts";
+
+it.effect("loads Cursor's lazy catalog chunks from a packaged entry point", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const serverDir = NodeURL.fileURLToPath(new URL("../../apps/server/", import.meta.url));
+      // Keep normal package resolution, including on Windows without symlink privileges.
+      const tempDir = yield* fs.makeTempDirectoryScoped({
+        directory: serverDir,
+        prefix: ".cursor-bundle-test-",
+      });
+      const entry = path.join(tempDir, "catalog.mjs");
+      yield* fs.writeFileString(
+        entry,
+        `import { Cursor } from "@cursor/sdk";
+import { strict as assert } from "node:assert";
+// An empty key loads the catalog chunk, then stops before any network request.
+await assert.rejects(Cursor.models.list({ apiKey: "" }), {
+  name: "ConfigurationError",
+  message: /API key is required/,
+});
+`,
+      );
+      yield* Effect.promise(() =>
+        build({
+          entry: [entry],
+          outDir: path.join(tempDir, "dist"),
+          config: false,
+          platform: "node",
+          deps: {
+            alwaysBundle: shouldBundleCliDependency,
+            neverBundle: isExternalCliDependency,
+            onlyBundle: false,
+          },
+        }),
+      );
+      const exitCode = yield* spawner.exitCode(
+        ChildProcess.make(process.execPath, [path.join(tempDir, "dist/catalog.mjs")], {
+          stderr: "inherit",
+        }),
+      );
+      assert.strictEqual(exitCode, 0);
+    }),
+  ).pipe(Effect.provide(NodeServices.layer)),
+);
 
 // Only the field this test cares about; decoding ignores everything else.
 // optionalDependencies matter as much as dependencies here: every native family
@@ -87,7 +137,7 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
+      ["@cursor/sdk", "@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
     );
   });
 });

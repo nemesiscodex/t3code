@@ -725,6 +725,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       resolveMacStageDependencies({
         serverDependencies: {
           "@anthropic-ai/claude-agent-sdk": "^0.3.170",
+          "@cursor/sdk": "1.0.22",
           "@ff-labs/fff-node": "0.9.4",
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
@@ -739,6 +740,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         fffNodeVersion: "0.9.4",
       }),
       {
+        "@cursor/sdk": "1.0.22",
         "@ff-labs/fff-node": "0.9.4",
         "msgpackr-extract": "3.0.4",
         "node-pty": "1.1.0",

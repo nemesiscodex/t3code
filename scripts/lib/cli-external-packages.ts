@@ -26,6 +26,16 @@
  * enforced by a test, not by inspection.
  */
 export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
+  // Cursor's webpack runtime imports numbered chunks relative to its entry
+  // point. Inlining that entry loses the chunks (for example, 642.js when
+  // listing models). Stage the SDK, its platform packages, and dependencies.
+  "@cursor/sdk",
+  "@bufbuild/protobuf",
+  "@connectrpc/",
+  "@statsig/js-client",
+  "@statsig/client-core",
+  "undici",
+  "zod",
   "node-pty",
   "ffi-rs",
   "@yuuang/",
