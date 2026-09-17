@@ -300,7 +300,14 @@ import {
   ProviderConsumeResetCreditInput,
   ProviderConsumeResetCreditResult,
 } from "./providerUsageLimits.ts";
-import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import {
+  ThreadUsageCost,
+  ThreadUsageCostInput,
+  UsagePricing,
+  UsageReadError,
+  UsageSummary,
+  UsageSummaryInput,
+} from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   ScheduledTaskDeleteInput,
@@ -464,6 +471,7 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetThreadUsageCost: "server.getThreadUsageCost",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
   // Scheduled tasks
@@ -832,6 +840,12 @@ const WsServerRetryResourceTelemetryRpc = Rpc.make(WS_METHODS.serverRetryResourc
 const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
   payload: UsageSummaryInput,
   success: UsageSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
+});
+
+const WsServerGetThreadUsageCostRpc = Rpc.make(WS_METHODS.serverGetThreadUsageCost, {
+  payload: ThreadUsageCostInput,
+  success: ThreadUsageCost,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
@@ -1728,6 +1742,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetThreadUsageCostRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
   WsScheduledTasksListRpc,
