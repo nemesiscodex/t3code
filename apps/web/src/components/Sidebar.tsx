@@ -11,6 +11,7 @@ import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
+import { formatUsd } from "@t3tools/shared/usageFormat";
 import { useAtomValue } from "@effect/atom-react";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import * as Schema from "effect/Schema";
@@ -148,7 +149,11 @@ import {
   useProjects,
   useThreadShells,
 } from "../state/entities";
-import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
+import {
+  environmentServerConfigsAtom,
+  primaryServerKeybindingsAtom,
+  serverEnvironment,
+} from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
 import { useEnvironmentQuery } from "../state/query";
@@ -395,6 +400,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  loadCost,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -412,12 +418,41 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  loadCost: boolean;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
+  const costRevision = JSON.stringify([
+    thread.latestRun?.runId ?? null,
+    thread.latestRun?.completedAt ?? null,
+  ]);
+  const costQuery = useEnvironmentQuery(
+    loadCost
+      ? serverEnvironment.threadUsageCost({
+          environmentId: thread.environmentId,
+          input: { threadId: thread.id, revision: costRevision },
+        })
+      : null,
+  );
+  const retainedCost = useRetainedValue(
+    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    costQuery.data,
+  );
+  const visibleCost = costQuery.data ?? (costQuery.isPending ? retainedCost : null);
+  const costLabel =
+    visibleCost?.availability === "available"
+      ? `${visibleCost.costSource === "modelPriced" ? "~" : ""}${formatUsd(visibleCost.costUsd)}${visibleCost.completeness === "lowerBound" ? "+" : ""}`
+      : null;
+  const costSourceLabel =
+    visibleCost?.availability === "available" && visibleCost.completeness === "lowerBound"
+      ? "Partial"
+      : visibleCost?.availability === "available" && visibleCost.costSource === "providerReported"
+        ? "Provider-reported"
+        : "Estimated";
+  const refreshingCost = costQuery.isPending && visibleCost?.availability === "available";
   return (
     <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>
       <ThreadHoverCard
@@ -475,11 +510,22 @@ function SidebarThreadTooltip({
               badgeClassName="h-2 min-w-2 px-0"
               iconClassName="size-3 shrink-0 grayscale opacity-60"
             />
-            <div className="min-w-0 truncate text-foreground/75">
+            <div className="min-w-0 flex-1 truncate text-foreground/75">
               {showInstanceBadge && providerEntry
                 ? `${modelLabel} · ${providerEntry.displayName}`
                 : modelLabel}
             </div>
+            {costLabel ? (
+              <span
+                aria-label={`${costSourceLabel} API-equivalent usage ${costLabel}${refreshingCost ? ", updating" : ""}`}
+                className={cn(
+                  "ml-auto shrink-0 pl-3 font-medium text-foreground/80 tabular-nums",
+                  refreshingCost && "opacity-60",
+                )}
+              >
+                {costLabel}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {previousProviderNames.length > 0 ? (
@@ -1281,6 +1327,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
     : thread.modelSelection.model;
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   // The local environment is "this machine" and needs no marker; every other
   // one gets its machine glyph. With no local environment (the hosted app)
@@ -1303,6 +1350,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      loadCost={detailsOpen}
     />
   );
 
@@ -1660,7 +1708,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           sortable?.isDragging && "relative z-20",
         )}
       >
-        <Tooltip disabled={sortable?.isDragging}>
+        <Tooltip disabled={sortable?.isDragging} onOpenChange={setDetailsOpen}>
           <TooltipTrigger
             render={
               <div
@@ -1813,7 +1861,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         sortable?.isDragging && "relative z-20",
       )}
     >
-      <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
+      <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging} onOpenChange={setDetailsOpen}>
         <TooltipTrigger
           render={
             <div
@@ -2106,6 +2154,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
     : thread.modelSelection.model;
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,
@@ -2131,7 +2180,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   }, [isFileDragOver]);
   return (
     <li role="presentation" className="list-none" {...fileDropHandlers}>
-      <Tooltip>
+      <Tooltip onOpenChange={setDetailsOpen}>
         <TooltipTrigger
           render={
             <button
@@ -2197,6 +2246,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           branchMismatch={branchMismatch}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
+          loadCost={detailsOpen}
         />
       </Tooltip>
     </li>

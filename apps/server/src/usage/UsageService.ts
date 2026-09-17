@@ -17,7 +17,10 @@ import * as NodeOS from "node:os";
 import {
   ClaudeSettings,
   CodexSettings,
+  type OrchestrationV2ThreadProjection,
   type ProviderInstanceConfig,
+  type ThreadUsageCost,
+  type ThreadUsageCostInput,
   USAGE_CONTRACT_VERSION,
   type ServerSettings as ServerSettingsValue,
   type UsageProviderKind,
@@ -62,6 +65,7 @@ import {
   type ScanCache,
 } from "./usageScanCache.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
+import { summarizeThreadUsageCost } from "./threadUsageCost.ts";
 
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
@@ -111,6 +115,13 @@ export class UsageService extends Context.Service<
   UsageService,
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
+    readonly readThreadCost: (
+      input: ThreadUsageCostInput,
+      projection: Pick<
+        OrchestrationV2ThreadProjection,
+        "runs" | "attempts" | "subagents" | "providerTurns"
+      >,
+    ) => Effect.Effect<ThreadUsageCost, UsageReadError>;
     /** Refetches the rate table ahead of its TTL. See `ensureRates`. */
     readonly refreshRates: Effect.Effect<UsagePricing>;
   }
@@ -138,6 +149,13 @@ const layerTest = Layer.succeed(
         sources: [],
         pricing: EMPTY_PRICING,
         scanDurationMs: 0,
+      }),
+    readThreadCost: (input) =>
+      Effect.succeed({
+        threadId: input.threadId,
+        revision: input.revision,
+        availability: "unavailable",
+        reason: "noUsage",
       }),
     refreshRates: Effect.succeed(EMPTY_PRICING),
   }),
@@ -691,7 +709,24 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates } as const;
+  const readThreadCost = Effect.fn("UsageService.readThreadCost")(function* (
+    input: ThreadUsageCostInput,
+    projection: Pick<
+      OrchestrationV2ThreadProjection,
+      "runs" | "attempts" | "subagents" | "providerTurns"
+    >,
+  ) {
+    const settings = yield* readSettings;
+    yield* ensureRates(false);
+    return summarizeThreadUsageCost({
+      request: input,
+      projection,
+      rates,
+      priceOverrides: createOverrideRateTable(settings.usagePriceOverrides),
+    });
+  });
+
+  return { readSummary, readThreadCost, refreshRates } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

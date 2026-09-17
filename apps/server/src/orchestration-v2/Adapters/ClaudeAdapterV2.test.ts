@@ -2554,6 +2554,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         );
         assert.equal(completed?.type, "provider_turn.updated");
         if (completed?.type === "provider_turn.updated") {
+          assert.equal(completed.providerTurn.reportedCostUsd, 0);
           assert.deepEqual(completed.providerTurn.turnTokenUsage, {
             usageScope: "main_agent",
             usageStatus: "complete",

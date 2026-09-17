@@ -1,6 +1,9 @@
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
-import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
+import {
+  claudeReportedCostUsd,
+  normalizeClaudeTurnTokenUsage,
+} from "../../provider/ClaudeTurnTokenUsage.ts";
 import {
   type CanUseTool,
   forkSession as forkClaudeSession,
@@ -4207,6 +4210,7 @@ export function makeClaudeAdapterV2(
           }
 
           const threadDisposition = input.threadDisposition ?? "reusable";
+          const reportedCostUsd = claudeReportedCostUsd(input.result);
           const terminalEvent: ProviderAdapterV2Event =
             input.status === "failed"
               ? {
@@ -4256,6 +4260,7 @@ export function makeClaudeAdapterV2(
                       input.context.subagentsByToolUseId.size > 0,
                     input.status,
                   ),
+                  ...(reportedCostUsd === undefined ? {} : { reportedCostUsd }),
                 },
               }),
               // Surface this native thread's roster before the root turn

@@ -7,6 +7,13 @@ function finiteNonNegativeInteger(value: unknown): number | undefined {
     : undefined;
 }
 
+export function claudeReportedCostUsd(
+  result: { readonly total_cost_usd?: unknown } | undefined,
+): number | undefined {
+  const value = result?.total_cost_usd;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
 export function normalizeClaudeTurnTokenUsage(
   result: { readonly subtype: SDKResultMessage["subtype"]; readonly usage?: unknown } | undefined,
   hasSubagents: boolean,

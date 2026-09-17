@@ -14,7 +14,7 @@
  */
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /**
  * Bumped whenever the shape of {@link UsageSummary} changes incompatibly. The
@@ -201,6 +201,35 @@ export const UsageSummary = Schema.Struct({
   scanDurationMs: NonNegativeInt,
 });
 export type UsageSummary = typeof UsageSummary.Type;
+
+/**
+ * The client supplies a revision derived from the thread shell. It has no
+ * pricing meaning; it gives the query cache a new identity when another run
+ * starts or settles while allowing the previous result to remain visible.
+ */
+export const ThreadUsageCostInput = Schema.Struct({
+  threadId: ThreadId,
+  revision: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+});
+export type ThreadUsageCostInput = typeof ThreadUsageCostInput.Type;
+
+export const ThreadUsageCost = Schema.Union([
+  Schema.Struct({
+    threadId: ThreadId,
+    revision: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+    availability: Schema.Literal("available"),
+    costUsd: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
+    costSource: Schema.Literals(["providerReported", "modelPriced"]),
+    completeness: Schema.Literals(["complete", "lowerBound"]),
+  }),
+  Schema.Struct({
+    threadId: ThreadId,
+    revision: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+    availability: Schema.Literal("unavailable"),
+    reason: Schema.Literals(["noUsage", "incomplete", "unpriced"]),
+  }),
+]);
+export type ThreadUsageCost = typeof ThreadUsageCost.Type;
 
 export class UsageReadError extends Schema.TaggedError<UsageReadError>()("UsageReadError", {
   reason: Schema.Literals(["scanFailed", "invalidWindow"]),

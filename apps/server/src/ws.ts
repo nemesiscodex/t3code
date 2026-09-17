@@ -92,6 +92,7 @@ import {
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
+  UsageReadError,
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
@@ -213,6 +214,7 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { readThreadUsageProjection } from "./usage/threadUsageCost.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
@@ -2523,6 +2525,22 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetUsageSummary, usage.readSummary(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverGetThreadUsageCost]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverGetThreadUsageCost,
+            readThreadUsageProjection(sql, input.threadId).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new UsageReadError({
+                    reason: "scanFailed",
+                    detail: `Thread ${input.threadId} usage could not be read.`,
+                    cause,
+                  }),
+              ),
+              Effect.flatMap((projection) => usage.readThreadCost(input, projection)),
+            ),
+            { "rpc.aggregate": "server" },
+          ),
         [WS_METHODS.serverRefreshUsageRates]: (_input) =>
           observeRpcEffect(WS_METHODS.serverRefreshUsageRates, usage.refreshRates, {
             "rpc.aggregate": "server",
