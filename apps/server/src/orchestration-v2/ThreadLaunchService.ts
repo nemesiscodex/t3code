@@ -43,6 +43,7 @@ import type * as Orchestrator from "./Orchestrator.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import { randomUuidV4 } from "./RandomUuid.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
+import { makeKeyedSerialExecutor } from "./KeyedSerialExecutor.ts";
 
 export type ThreadLaunchWorkspaceStrategy =
   | { readonly type: "root"; readonly branch?: string | undefined }
@@ -182,6 +183,7 @@ const make = Effect.gen(function* () {
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const preparationScope = yield* Scope.make("sequential");
   const scheduledLaunches = yield* Ref.make<ReadonlySet<CommandId>>(new Set());
+  const worktreeBranchLocks = yield* makeKeyedSerialExecutor<string>();
   yield* Effect.addFinalizer(() => Scope.close(preparationScope, Exit.void));
 
   const mapError =
@@ -314,6 +316,7 @@ const make = Effect.gen(function* () {
           ? input.workspaceStrategy.worktreePath
           : null;
       if (input.workspaceStrategy.type === "worktree") {
+        const worktreeStrategy = input.workspaceStrategy;
         if (runId !== null) {
           yield* threads
             .dispatch({
@@ -325,11 +328,11 @@ const make = Effect.gen(function* () {
             })
             .pipe(Effect.mapError(mapError(input, "update-thread", threadId)));
         }
-        let startRef = input.workspaceStrategy.baseRef;
+        let startRef = worktreeStrategy.baseRef;
         // "Start from origin" is a stored default; repos without the requested
         // remote branch fall back to the local base branch.
         const startFromOrigin =
-          input.workspaceStrategy.startFromOrigin === true &&
+          worktreeStrategy.startFromOrigin === true &&
           (yield* git
             .remoteExists({ cwd: project.workspaceRoot, remoteName: "origin" })
             .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId))));
@@ -339,13 +342,13 @@ const make = Effect.gen(function* () {
             .fetchRemote({
               cwd: project.workspaceRoot,
               remoteName: "origin",
-              refName: input.workspaceStrategy.baseRef,
+              refName: worktreeStrategy.baseRef,
             })
             .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)));
           const remoteBaseExists = yield* git
             .remoteBranchExists({
               cwd: project.workspaceRoot,
-              refName: input.workspaceStrategy.baseRef,
+              refName: worktreeStrategy.baseRef,
               remoteName: "origin",
             })
             .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)));
@@ -353,7 +356,7 @@ const make = Effect.gen(function* () {
             startRef = yield* git
               .resolveRemoteTrackingCommit({
                 cwd: project.workspaceRoot,
-                refName: input.workspaceStrategy.baseRef,
+                refName: worktreeStrategy.baseRef,
                 fallbackRemoteName: "origin",
               })
               .pipe(
@@ -364,13 +367,25 @@ const make = Effect.gen(function* () {
         }
         if (startFromOrigin) yield* setupTracker.stageStatus(threadId, "fetch", "done");
         yield* setupTracker.stageStatus(threadId, "checkout", "running");
-        const worktree = yield* git
-          .createWorktree(
+        const createWorktree = Effect.gen(function* () {
+          if (requestedBranch !== undefined) {
+            const existingBranches = new Set(
+              (yield* git.listLocalBranchNames(project.workspaceRoot)).map((name) =>
+                name.toLowerCase(),
+              ),
+            );
+            branch = requestedBranch;
+            while (existingBranches.has(branch.toLowerCase())) {
+              const suffix = (yield* randomUuidV4).replaceAll("-", "").slice(0, 8);
+              branch = `${requestedBranch}-${suffix}`;
+            }
+          }
+          return yield* git.createWorktree(
             {
               cwd: project.workspaceRoot,
               refName: startRef,
               newRefName: branch!,
-              baseRefName: input.workspaceStrategy.baseRef,
+              baseRefName: worktreeStrategy.baseRef,
               path: null,
             },
             {
@@ -383,8 +398,13 @@ const make = Effect.gen(function* () {
                   setupTracker.stage(threadId, "checkout", { percent: progress.percent }),
               },
             },
-          )
-          .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)));
+          );
+        }).pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)));
+        // Keep collision detection and ref creation atomic within this server for matching names.
+        const worktree = yield* worktreeBranchLocks.withLock(
+          `${project.workspaceRoot}\0${requestedBranch?.toLowerCase() ?? branch}`,
+          createWorktree,
+        );
         worktreePath = worktree.worktree.path;
         branch = worktree.worktree.refName;
         createdWorktreePath = worktreePath;
