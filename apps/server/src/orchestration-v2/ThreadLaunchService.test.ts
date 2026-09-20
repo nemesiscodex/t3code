@@ -96,6 +96,7 @@ const adapter = {
 
 interface HarnessOptions {
   readonly createWorktree?: GitWorkflow.GitWorkflowService["Service"]["createWorktree"];
+  readonly listLocalBranchNames?: GitWorkflow.GitWorkflowService["Service"]["listLocalBranchNames"];
   readonly fetchRemote?: GitWorkflow.GitWorkflowService["Service"]["fetchRemote"];
   readonly renameBranch?: GitWorkflow.GitWorkflowService["Service"]["renameBranch"];
   readonly runSetup?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"];
@@ -157,6 +158,7 @@ function makeHarness(options: HarnessOptions = {}) {
     }),
     Layer.mock(GitWorkflow.GitWorkflowService)({
       createWorktree,
+      listLocalBranchNames: options.listLocalBranchNames ?? (() => Effect.succeed([])),
       renameBranch,
       fetchRemote: options.fetchRemote ?? (() => Effect.void),
       remoteExists: () => Effect.succeed(true),
@@ -1109,6 +1111,73 @@ it.effect("keeps an explicit branch name instead of generating one", () =>
       yield* waitUntil(() => Effect.sync(() => harness.createWorktree.mock.calls.length === 1));
       assert.equal(harness.generateBranchName.mock.calls.length, 0);
       assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.newRefName, "my-feature");
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
+it.effect("adds a random suffix when an explicit worktree branch already exists", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({
+      listLocalBranchNames: () => Effect.succeed(["release/fix"]),
+    });
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      yield* launches.launch(
+        launchInput({
+          command: "command:launch:explicit-branch-collision",
+          thread: "thread:launch:explicit-branch-collision",
+          message: "Build the fix",
+          workspace: { type: "worktree", baseRef: "main", branch: "release/fix" },
+        }),
+      );
+      yield* waitUntil(() => Effect.sync(() => harness.createWorktree.mock.calls.length === 1));
+      assert.match(
+        harness.createWorktree.mock.calls[0]?.[0]?.newRefName ?? "",
+        /^release\/fix-[0-9a-f]{8}$/u,
+      );
+      assert.equal(harness.generateBranchName.mock.calls.length, 0);
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
+it.effect("serializes matching explicit branch names so concurrent launches stay unique", () =>
+  Effect.gen(function* () {
+    const createdBranches: string[] = [];
+    const harness = makeHarness({
+      listLocalBranchNames: () => Effect.sync(() => [...createdBranches]),
+      createWorktree: (input) =>
+        Effect.sync(() => {
+          createdBranches.push(input.newRefName!);
+          return {
+            worktree: {
+              path: `/repo-worktrees/${input.newRefName}`,
+              refName: input.newRefName,
+              headSha: "abc",
+            },
+          } as never;
+        }),
+    });
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      yield* Effect.all(
+        ["one", "two"].map((id) =>
+          launches.launch(
+            launchInput({
+              command: `command:launch:concurrent-explicit-branch-${id}`,
+              thread: `thread:launch:concurrent-explicit-branch-${id}`,
+              message: `Build ${id}`,
+              workspace: { type: "worktree", baseRef: "main", branch: "release/fix" },
+            }),
+          ),
+        ),
+        { concurrency: "unbounded" },
+      );
+      yield* waitUntil(() => Effect.sync(() => createdBranches.length === 2));
+      assert.equal(createdBranches.filter((branch) => branch === "release/fix").length, 1);
+      assert.equal(
+        createdBranches.filter((branch) => /^release\/fix-[0-9a-f]{8}$/u.test(branch)).length,
+        1,
+      );
     }).pipe(Effect.provide(harness.layer));
   }),
 );

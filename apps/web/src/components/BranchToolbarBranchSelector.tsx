@@ -85,6 +85,8 @@ interface BranchToolbarBranchSelectorProps {
   onActiveThreadBranchOverrideChange?: (refName: string | null) => void;
   startFromOrigin: boolean;
   onStartFromOriginChange: (startFromOrigin: boolean) => void;
+  worktreeBranchName: string | null;
+  onWorktreeBranchNameChange: (worktreeBranchName: string | null) => void;
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest?: () => void;
 }
@@ -107,6 +109,8 @@ export function BranchToolbarBranchSelector({
   onActiveThreadBranchOverrideChange,
   startFromOrigin,
   onStartFromOriginChange,
+  worktreeBranchName,
+  onWorktreeBranchNameChange,
   onCheckoutPullRequestRequest,
   onComposerFocusRequest,
 }: BranchToolbarBranchSelectorProps) {
@@ -680,6 +684,11 @@ export function BranchToolbarBranchSelector({
       originControl={
         isSelectingWorktreeBase
           ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
+          : undefined
+      }
+      worktreeBranchControl={
+        isSelectingWorktreeBase
+          ? { value: worktreeBranchName, onValueChange: onWorktreeBranchNameChange }
           : undefined
       }
       popupProps={{

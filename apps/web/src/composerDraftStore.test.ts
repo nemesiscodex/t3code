@@ -1721,6 +1721,23 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(useComposerDraftStore.getState().getDraftThread(draftId)?.startFromOrigin).toBe(false);
   });
 
+  it("stores an optional custom worktree branch name with the draft thread", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, {
+      threadId,
+      envMode: "worktree",
+      worktreeBranchName: "release/fix",
+    });
+
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.worktreeBranchName).toBe(
+      "release/fix",
+    );
+
+    store.setDraftThreadContext(draftId, { worktreeBranchName: null });
+
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.worktreeBranchName).toBeNull();
+  });
+
   it("preserves existing branch and worktree when setProjectDraftThreadId receives undefined", () => {
     const store = useComposerDraftStore.getState();
     store.setProjectDraftThreadId(projectRef, draftId, {

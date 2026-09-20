@@ -72,6 +72,8 @@ describe("ThreadDetailsPanel", () => {
       onEnvModeChange: vi.fn(),
       startFromOrigin: false,
       onStartFromOriginChange: vi.fn(),
+      worktreeBranchName: null,
+      onWorktreeBranchNameChange: vi.fn(),
       onComposerFocusRequest: vi.fn(),
       versionMismatch: null,
       onDismissVersionMismatch: vi.fn(),

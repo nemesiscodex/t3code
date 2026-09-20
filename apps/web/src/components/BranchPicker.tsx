@@ -1,5 +1,6 @@
 import type { VcsRef } from "@t3tools/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { GitBranchIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -15,6 +16,7 @@ import { MiddleTruncate } from "./ui/middle-truncate";
 import { cn } from "../lib/utils";
 import { shouldLoadNextBranchPageAfterScroll } from "../state/paginatedBranches";
 import { RefreshIcon } from "./ui/refresh-icon";
+import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import { getVirtualizedScrollFadeClassName } from "./ui/scroll-area";
 import {
@@ -44,6 +46,7 @@ export function BranchPicker({
   onLoadNext,
   statusText,
   originControl,
+  worktreeBranchControl,
   popupProps,
   renderItem,
   getItemType,
@@ -63,6 +66,9 @@ export function BranchPicker({
   onLoadNext: () => void;
   statusText: string | null;
   originControl?: { checked: boolean; onCheckedChange: (checked: boolean) => void } | undefined;
+  worktreeBranchControl?:
+    | { value: string | null; onValueChange: (value: string | null) => void }
+    | undefined;
   popupProps: Omit<ComponentProps<typeof ComboboxPopup>, "children">;
   renderItem: (value: string, index: number) => ReactNode;
   getItemType?: ((value: string) => string) | undefined;
@@ -70,6 +76,8 @@ export function BranchPicker({
 }) {
   const highlightedValueRef = useRef<string | null>(null);
   const startFromOriginSwitchId = useId();
+  const customBranchSwitchId = useId();
+  const customBranchInputId = useId();
   const branchListScrollElementRef = useRef<HTMLElement | null>(null);
   const previousBranchListScrollTopRef = useRef<number | null>(null);
   const handleOpenChange = useCallback(
@@ -251,6 +259,43 @@ export function BranchPicker({
                 branch.
               </TooltipPopup>
             </Tooltip>
+          ) : null}
+          {worktreeBranchControl ? (
+            <div className="border-t border-border/60 px-3 py-2 text-xs">
+              <label
+                htmlFor={customBranchSwitchId}
+                className="flex cursor-pointer items-center justify-between gap-3"
+              >
+                <span className="flex min-w-0 items-center gap-1.5 font-medium text-muted-foreground">
+                  <GitBranchIcon aria-hidden="true" className="size-3 shrink-0 opacity-70" />
+                  <span className="truncate">Custom branch name</span>
+                </span>
+                <Switch
+                  id={customBranchSwitchId}
+                  checked={worktreeBranchControl.value !== null}
+                  size="sm"
+                  aria-label="Use a custom worktree branch name"
+                  onCheckedChange={(checked) =>
+                    worktreeBranchControl.onValueChange(checked ? "" : null)
+                  }
+                />
+              </label>
+              {worktreeBranchControl.value !== null ? (
+                <label htmlFor={customBranchInputId} className="mt-2 block">
+                  <span className="sr-only">Worktree branch name</span>
+                  <Input
+                    id={customBranchInputId}
+                    nativeInput
+                    size="compact"
+                    autoFocus
+                    value={worktreeBranchControl.value}
+                    placeholder="my-branch"
+                    aria-label="Worktree branch name"
+                    onChange={(event) => worktreeBranchControl.onValueChange(event.target.value)}
+                  />
+                </label>
+              ) : null}
+            </div>
           ) : null}
           {statusText ? <ComboboxStatus>{statusText}</ComboboxStatus> : null}
         </div>

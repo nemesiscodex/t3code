@@ -1838,6 +1838,8 @@ export default function ChatView(props: ChatViewProps) {
   const [pendingServerThreadEnvMode, setPendingServerThreadEnvMode] =
     useState<DraftThreadEnvMode | null>(null);
   const [pendingServerThreadBranch, setPendingServerThreadBranch] = useState<string | null>();
+  const [pendingServerThreadWorktreeBranchName, setPendingServerThreadWorktreeBranchName] =
+    useState<string | null>(null);
   const [
     pendingServerThreadStartFromOriginByThreadId,
     setPendingServerThreadStartFromOriginByThreadId,
@@ -6352,6 +6354,11 @@ export default function ChatView(props: ChatViewProps) {
       ? (pendingServerThreadStartFromOriginByThreadId[activeThread?.id ?? ""] ??
         activeProjectSettings.settings.newWorktreesStartFromOrigin)
       : false;
+  const worktreeBranchName = isLocalDraftThread
+    ? (draftThread?.worktreeBranchName ?? null)
+    : canOverrideServerThreadEnvMode
+      ? pendingServerThreadWorktreeBranchName
+      : null;
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
@@ -7087,6 +7094,7 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     setPendingServerThreadEnvMode(null);
     setPendingServerThreadBranch(undefined);
+    setPendingServerThreadWorktreeBranchName(null);
   }, [activeThread?.id]);
 
   useEffect(() => {
@@ -7095,6 +7103,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     setPendingServerThreadEnvMode(null);
     setPendingServerThreadBranch(undefined);
+    setPendingServerThreadWorktreeBranchName(null);
   }, [canOverrideServerThreadEnvMode]);
 
   useEffect(() => {
@@ -8341,6 +8350,11 @@ export default function ChatView(props: ChatViewProps) {
       setThreadError(threadIdForSend, "Select a base branch before sending in New worktree mode.");
       return;
     }
+    const requestedWorktreeBranchName = worktreeBranchName?.trim() ?? null;
+    if (shouldCreateWorktree && worktreeBranchName !== null && !requestedWorktreeBranchName) {
+      setThreadError(threadIdForSend, "Enter a branch name or turn off Custom branch name.");
+      return;
+    }
 
     const composerImagesSnapshot = [...composerImages];
     const composerFilesSnapshot = [...composerFiles];
@@ -8639,6 +8653,9 @@ export default function ChatView(props: ChatViewProps) {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: activeThreadBranch!,
                       requireWorktree: true,
+                      ...(requestedWorktreeBranchName
+                        ? { branch: requestedWorktreeBranchName }
+                        : {}),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },
                     runSetupScript: true,
@@ -8966,6 +8983,9 @@ export default function ChatView(props: ChatViewProps) {
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: baseBranchForWorktree,
+                      ...(requestedWorktreeBranchName
+                        ? { branch: requestedWorktreeBranchName }
+                        : {}),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },
                     runSetupScript: true,
@@ -9952,6 +9972,18 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  const onWorktreeBranchNameChange = (nextWorktreeBranchName: string | null) => {
+    if (canOverrideServerThreadEnvMode) {
+      setPendingServerThreadWorktreeBranchName(nextWorktreeBranchName);
+      return;
+    }
+    if (isLocalDraftThread) {
+      setDraftThreadContext(composerDraftTarget, {
+        worktreeBranchName: nextWorktreeBranchName,
+      });
+    }
+  };
+
   const onExpandTimelineImage = useCallback((preview: ExpandedImagePreview) => {
     setExpandedImage(preview);
   }, []);
@@ -10203,6 +10235,8 @@ export default function ChatView(props: ChatViewProps) {
       : {}),
     startFromOrigin,
     onStartFromOriginChange,
+    worktreeBranchName,
+    onWorktreeBranchNameChange,
     ...(canCheckoutPullRequestIntoThread
       ? { onCheckoutPullRequestRequest: openPullRequestDialog }
       : {}),
@@ -10779,6 +10813,8 @@ export default function ChatView(props: ChatViewProps) {
                                 onEnvModeChange={onEnvModeChange}
                                 startFromOrigin={startFromOrigin}
                                 onStartFromOriginChange={onStartFromOriginChange}
+                                worktreeBranchName={worktreeBranchName}
+                                onWorktreeBranchNameChange={onWorktreeBranchNameChange}
                                 {...(canOverrideServerThreadEnvMode
                                   ? { effectiveEnvModeOverride: envMode }
                                   : {})}
