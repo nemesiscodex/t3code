@@ -27,7 +27,81 @@ const seedPreview = Effect.gen(function* () {
   `;
 });
 
+const splitV2MigrationNames = [
+  "OrchestrationV2Subagents",
+  "OrchestrationV2Foundation",
+  "OrchestrationV2ProviderSessionBindings",
+  "OrchestrationV2ThreadLaunchWorkflows",
+  "ApplicationEventSource",
+  "OrchestrationV2EffectCancellation",
+  "ScheduledTasks",
+  "LegacyV1ImportState",
+  "ApplicationEventSequenceIndexes",
+  "OrchestrationV2RecoveryIndexes",
+  "OrchestrationV2ShellIndexes",
+] as const;
+
+const seedSplitV2Preview = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* runMigrations({ toMigrationInclusive: 49 });
+  yield* Migrator.make({})({
+    loader: Migrator.fromRecord({ "50_OrchestrationV2": OrchestrationV2 }),
+  });
+  for (const [index, name] of splitV2MigrationNames.entries()) {
+    yield* sql`
+      INSERT INTO effect_sql_migrations (migration_id, name)
+      VALUES (${index + 51}, ${name})
+    `;
+  }
+  yield* sql`
+    INSERT INTO orchestration_v2_legacy_imports
+      (thread_id, source_updated_at, shell_imported_at, transcript_imported_at, imported_message_count)
+    VALUES ('split-preview-thread', '2026-09-08', '2026-09-08', '2026-09-08', 17)
+  `;
+  yield* sql`
+    UPDATE effect_sql_migrations SET created_at = '2026-09-08 00:00:00'
+    WHERE migration_id >= 50
+  `;
+});
+
 describe("V2 preview upgrade", () => {
+  it.effect("upgrades the split V2 migration ledger without replaying its schema", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* seedSplitV2Preview;
+      const imports = yield* sql`SELECT * FROM orchestration_v2_legacy_imports`;
+
+      assert.deepStrictEqual(yield* runMigrations(), [
+        [50, "ProjectionThreadPullRequests"],
+        [51, "ProjectionThreadMessageContext"],
+        [52, "ProjectionThreadTitleState"],
+        [53, "PullRequestFilesViewed"],
+        [54, "ProjectionThreadsAutoSettleDisabledAt"],
+        [56, "RemoveRedundantProjectionIndexes"],
+      ]);
+      assert.deepStrictEqual(yield* runMigrations(), []);
+      assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
+      const history = yield* sql<{ readonly migration_id: number; readonly name: string }>`
+        SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id
+      `;
+      assert.deepStrictEqual(
+        history.map((row) => [row.migration_id, row.name] as const),
+        migrationManifest,
+      );
+      assert.deepStrictEqual(
+        yield* sql`SELECT created_at FROM effect_sql_migrations WHERE migration_id = 55`,
+        [{ created_at: "2026-09-08 00:00:00" }],
+      );
+      const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_threads)`;
+      assert.ok(columns.some((column) => column.name === "auto_settle_disabled_at"));
+      assert.ok(columns.some((column) => column.name === "title_state_json"));
+      assert.deepStrictEqual(
+        yield* sql`SELECT name FROM sqlite_master WHERE name = 'pull_request_files_viewed'`,
+        [{ name: "pull_request_files_viewed" }],
+      );
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("upgrades a published preview without replaying V2 or losing import progress", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
