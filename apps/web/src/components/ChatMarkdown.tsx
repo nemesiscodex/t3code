@@ -1066,7 +1066,6 @@ function MarkdownCodeBlock({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    className="chat-markdown-chrome-action"
                     onClick={() => setPreview({ code, theme })}
                     aria-label="Preview Mermaid diagram"
                   />
