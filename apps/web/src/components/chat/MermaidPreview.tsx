@@ -46,32 +46,36 @@ export function MermaidPreview({
       }}
     >
       <DialogPopup
-        className="w-auto max-w-[96vw] p-4 [--media-width:92vw] sm:[--media-width:calc(92vw-96px)]"
+        className="w-auto max-w-[96vw] [--media-width:92vw] sm:[--media-width:calc(92vw-96px)]"
         bottomStickOnMobile={false}
       >
-        <DialogTitle className="pr-8 text-base">Mermaid diagram</DialogTitle>
-        <DialogDescription className="my-2">
-          Scroll to zoom, drag to pan. Use +, − or 0 to zoom or fit, and arrow keys to move.
-        </DialogDescription>
-        {error ? (
-          <pre
-            role="alert"
-            className="max-h-[60vh] max-w-[80vw] overflow-auto whitespace-pre-wrap text-sm"
-          >
-            {error}
-          </pre>
-        ) : src ? (
-          <ZoomableImage
-            src={src}
-            name="Mermaid diagram"
-            controls
-            onError={() => setError("Could not display this diagram.")}
-          />
-        ) : (
-          <p role="status" className="p-8 text-sm text-muted-foreground">
-            Rendering diagram…
-          </p>
-        )}
+        <div className="p-4">
+          <div className="pr-8">
+            <DialogTitle>Mermaid diagram</DialogTitle>
+          </div>
+          <DialogDescription className="my-2">
+            Scroll to zoom, drag to pan. Use +, − or 0 to zoom or fit, and arrow keys to move.
+          </DialogDescription>
+          {error ? (
+            <pre
+              role="alert"
+              className="max-h-[60vh] max-w-[80vw] overflow-auto whitespace-pre-wrap text-sm"
+            >
+              {error}
+            </pre>
+          ) : src ? (
+            <ZoomableImage
+              src={src}
+              name="Mermaid diagram"
+              controls
+              onError={() => setError("Could not display this diagram.")}
+            />
+          ) : (
+            <p role="status" className="p-8 text-sm text-muted-foreground">
+              Rendering diagram…
+            </p>
+          )}
+        </div>
       </DialogPopup>
     </Dialog>
   );
