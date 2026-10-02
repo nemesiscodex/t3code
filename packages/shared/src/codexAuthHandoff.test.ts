@@ -30,6 +30,11 @@ const input = {
 const callbackUrl = `http://127.0.0.1:54213/auth/callback?state=${"a".repeat(43)}&code=one-time-code&client_id=oaiapp_test`;
 
 describe("Codex desktop handoff", () => {
+  it.each([false, true])("uses the isolated V2 handler with development=%s", (development) => {
+    const link = codexAuthHandoffUrl(input, development);
+    expect(new URL(link).protocol).toBe(development ? "t3code-v2-dev:" : "t3code-v2:");
+    expect(readCodexAuthHandoff(link, development)).toEqual(input);
+  });
   it("keeps the hosted return route, account, and environment with the code in a fragment", () => {
     expect(readCodexAuthHandoff(codexAuthHandoffUrl(input), false)).toEqual(input);
     const delivery = codexAuthDeliveryUrl(input, callbackUrl);
