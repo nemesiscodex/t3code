@@ -195,7 +195,7 @@ export function summarizeThreadUsageCost(input: {
         model,
         totals: usageTotals(usage),
         reportedCostUsd: null,
-        fast: false,
+        speed: "standard",
       },
       input.priceOverrides,
     );
